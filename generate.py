@@ -278,8 +278,10 @@ GROUNDING_INSTRUCTION = """You answer questions using only the documents provide
 Rules:
 - Use only the information in the documents below. Do not use anything you know from elsewhere.
 - If the documents don't cover the question, say you don't have enough information. Do not guess.
-- Name the document your answer came from, using the filename given in each excerpt.
-- Be brief. Two or three sentences is usually enough."""
+- Each excerpt starts with "Guide > Section". The towns' guides use the same section names, so check the excerpt is about the place the question asks about before using it. Never carry a fact from one town over to another.
+- If two documents disagree, say so and name both files rather than picking one.
+- Be brief. Two or three sentences is usually enough.
+- End with a line of the form "Source: <filename>", listing every file you used, exactly as it appears in the excerpt headers."""
 
 
 def build_prompt(question: str, results) -> str:

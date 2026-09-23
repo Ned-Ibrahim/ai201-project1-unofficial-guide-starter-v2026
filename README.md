@@ -8,7 +8,12 @@ Ned, working with the `city_guides` corpus.
 
 ## What This Does
 
-<!-- Milestone 5. -->
+This answers questions about a fictional coastal region from `city_guides`: nine town guides and five cross-cutting guides (eating, walking, regional transport, seasons, accessibility).
+It handles practical, factual travel questions such as how often a bus runs, when car parks fill, how late kitchens serve, or which town is manageable with limited mobility.
+Each answer is built only from the guide sections retrieved for that question, and it ends with the file it came from.
+If nothing in the guides is close enough to the question, it says "I don't have enough information about that." and never calls the model.
+
+Run it with `python app.py ask "your question"` after `python app.py index`.
 
 ## Chunking Strategy
 
@@ -100,15 +105,30 @@ Cycling is pleasant on the river path and the trackbed, and unpleasant on Mill R
 
 ## Sample Answer
 
-<!-- One complete question and answer, pasted as text, with the source line
-     visible. Milestone 4. -->
+Produced by `python app.py ask "..."`, which runs `store.py::search`, `gate.py::check`, then `generate.py::answer_from_chunks`.
 
-**Question:**
+**Question:** Which town in the region is easiest to get around with limited mobility?
 
 **Answer:**
 
 ```
+  (best distance 0.518, cutoff 0.75)
+
+Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+
+Source: guide_accessibility.md
+
+Sources retrieved: guide_accessibility.md, guide_corry_vale.md, guide_halden_bay.md
 ```
+
+The answer came from the 4th-ranked chunk, not the 1st.
+The two Corry Vale chunks above it share the words "getting around" and say nothing about accessibility, and the model ignored them.
+
+**Grounding prompt.**
+I kept the starter's `GROUNDING_INSTRUCTION` in `generate.py` and added three rules for this corpus.
+Every town guide uses the same section names, so the model has to check which town an excerpt is about before using it, and never move a fact from one town to another.
+If two files disagree, it has to name both.
+It ends every answer with a `Source: <filename>` line, which makes criterion 2 checkable by reading the last line.
 
 **My relevance cutoff:** 0.75 (`THRESHOLD` in `config.py`), with `TOP_K = 5`.
 
