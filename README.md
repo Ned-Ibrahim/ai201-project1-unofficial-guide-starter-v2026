@@ -1,19 +1,6 @@
 # The Unofficial Guide
 
-<!-- Replace this line with your name and which corpus you picked. -->
-
-> **This file is your submission.** Fill it in as you go — most sections get
-> written during the milestone that produces them, not at the end.
->
-> How the starter works, and every command you'll need, is in `RUNNING.md`.
-> Leave that file alone.
->
-> **Paste everything as text.** No screenshots, no video. A typed table gets
-> full credit; a picture of the same table gets none.
->
-> Delete these instruction blocks as you replace them. The `<!-- -->` comments
-> are notes to you and don't show up when the page renders — you can leave them
-> or remove them.
+Ned, working with the `city_guides` corpus.
 
 ---
 
@@ -21,61 +8,94 @@
 
 ## What This Does
 
-<!-- Three or four sentences. Which corpus you picked, and the kinds of
-     questions your system answers. Write it for someone who has never seen
-     this repo.
-
-     Milestone 5. -->
+<!-- Milestone 5. -->
 
 ## Chunking Strategy
 
-**Chunk size:**
-**Overlap:**
+**Chunk size:** one chunk per `## ` section of a guide, capped at 900 characters of body text (`CHUNK_SIZE = 900`).
+Every chunk starts with a `Guide title > Section heading` label.
 
-<!-- What about YOUR documents made you pick these numbers? Short posts and
-     long sectioned guides don't want the same chunking, and "800 seemed
-     reasonable" earns nothing. Point at something you noticed when you read
-     the documents in Milestone 1.
+**Overlap:** none between sections.
+A section longer than 900 characters would be cut at sentence ends with up to 150 characters of whole sentences repeated across the cut (`CHUNK_OVERLAP = 150`), but no section in `city_guides` is that long, so no chunk carries overlap today.
 
-     If you changed your mind partway through, say so and say why. That's worth
-     more than pretending you got it right first time.
+**What about these documents made me pick this.**
+The city guides are organised by heading, not by length.
+All nine town guides share the same seven sections (Getting there, Getting around, Eat and drink, What to see, Where to stay, When to go, Practical notes), and a question like "how do I get to Kestrelford?" is answered by exactly one of them.
+Sections run 175 to 710 characters, so a section already is a right-sized unit.
 
-     Milestone 3. -->
+The starter's `fallback_split` cut every guide into fixed 800-character windows: 51 chunks from 14 documents, 650 characters on average, shortest 24.
+Those windows started mid-sentence and straddled two or three sections, so one chunk would hold the end of "Getting around" and the start of "Eat and drink" and match both kinds of question weakly.
+
+The label on top of each chunk matters as much as the split.
+"Getting there" in Kestrelford and "Getting there" in Halden Bay read almost the same, and without the label a chunk about bus times does not say which town the buses go to.
+
+**Cleaning (`ingest.py`).**
+Every town guide ends with a word-for-word identical "Practical notes" paragraph.
+It is a template, not information: it names Brightwater as the nearest full hospital even inside the Brightwater and Marchwood guides, while `guide_accessibility.md` says the nearest full hospital is in Marchwood.
+`strip_repeated_sections` drops any section whose body appears in 3 or more documents, which removes those nine copies.
+Left in, they would have been nine near-identical chunks competing for every "practical" question.
+`clean_text` also strips Markdown bold markers and joins hard-wrapped lines, since some guides wrap at 80 columns and some do not.
+
+**Where I changed my mind.**
+My first version kept the paragraph between a guide's title and its first heading as its own "Overview" chunk.
+Reading the sample chunks showed that in the cross-cutting guides that paragraph is a line like "An honest assessment rather than a promotional one", which answers nothing on its own.
+I now fold that paragraph into the top of the first section.
+In the town guides that adds useful context ("a hill town of 12,000, an hour inland from Brightwater") to the Getting there chunk.
+
+**Result:** 75 chunks, 359 characters on average, shortest 188, longest 871.
 
 ## Sample Chunks
 
-<!-- Five chunks, pasted as text. Label each one and name the file it came from
-     AND the function that produced it — the grader checks your code against
-     what you claim here.
+Printed by `python app.py chunks -n 5`.
 
-     `python app.py chunks -n 5` prints all three for you. Copy them straight
-     across.
-
-     Milestone 3. -->
-
-**Chunk 1** — source: `` — produced by: ``
+**Chunk 1** (source: `guide_accessibility.md#0`, produced by: `chunker.py::split_documents`)
 
 ```
+Getting around the region with limited mobility > Straightforward
+
+An honest assessment rather than a promotional one. Some of these places are difficult and it is better to know in advance.
+
+Thornby Wells is the easiest town in the region. It is flat, compact, and everything is within three minutes of everything else. Parking is free for two hours anywhere in town and the station is central. The pump room and gardens are level throughout.
+
+Marchwood has a modern tram network with level boarding on all four lines, running every 8 minutes on weekdays. The city museum and covered market are both step-free. The distances between districts are the main consideration.
+
+Brightwater is level along the river and through the centre. The mill museum is step-free. The station is a 15-minute walk from campus on flat ground, or the shuttle meets the four busiest arrivals.
 ```
 
-**Chunk 2** — source: `` — produced by: ``
+**Chunk 2** (source: `guide_corry_vale.md#5`, produced by: `chunker.py::split_documents`)
 
 ```
+Corry Vale > When to go
+
+May to September. Outside those months the pub in the third village closes, the farm shop reduces its hours, and several footpaths become genuinely boggy rather than merely wet. The road is not gritted above the second village and is impassable in snow.
 ```
 
-**Chunk 3** — source: `` — produced by: ``
+**Chunk 3** (source: `guide_givens_mill.md#3`, produced by: `chunker.py::split_documents`)
 
 ```
+Givens Mill > What to see
+
+The mill runs tours on the hour from 11 to 3 and the machinery is operating during them, which is loud and much more impressive than a static exhibit. The church has a Saxon doorway. The river walk downstream reaches Brightwater in about three hours.
 ```
 
-**Chunk 4** — source: `` — produced by: ``
+**Chunk 4** (source: `guide_marchwood.md#0`, produced by: `chunker.py::split_documents`)
 
 ```
+Marchwood > Getting there
+
+Marchwood is the regional hub — 180,000 people, the junction everyone changes trains at, and a city most visitors pass through rather than stop in. That is a mistake, though an understandable one, since almost nothing of interest is near the station.
+
+Every railway line in the region meets here, which is the city's defining feature. Trains to Brightwater run every 40 minutes until 11pm. The airport is 20 minutes out by a dedicated bus that runs every 15 minutes and costs more than the equivalent taxi shared between three people.
 ```
 
-**Chunk 5** — source: `` — produced by: ``
+**Chunk 5** (source: `guide_regional_transport.md#3`, produced by: `chunker.py::split_documents`)
 
 ```
+Getting around the region > Walking and cycling
+
+The river path from Brightwater runs four miles upstream on a good surface. The old railway trackbed from Kestrelford runs six miles on an easy gradient and is the best walking in the region for the effort involved. The coastal path from Halden Bay is more serious — exposed, and closed in high wind.
+
+Cycling is pleasant on the river path and the trackbed, and unpleasant on Mill Road and the coast road, neither of which has a shoulder.
 ```
 
 ## Sample Answer

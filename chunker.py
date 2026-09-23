@@ -22,6 +22,7 @@ to it, write down what you saw, and move on. That's a real observation about
 your pipeline, not giving up.
 """
 
+import re
 from dataclasses import dataclass
 
 import config
@@ -80,24 +81,138 @@ def fallback_split(
     return chunks
 
 
+_HEADING = re.compile(r"(?m)^(#{1,2}) +(.+?)\s*$")
+
+
+def _sections(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """
+    Break one guide into (heading, body) pairs.
+
+    Returns the document title (the `# ` line) and every section under it.
+    Text between the title and the first `## ` is folded into the top of the
+    first section rather than kept on its own. In the town guides that
+    paragraph says what the town is ("a hill town of 12,000, an hour inland
+    from Brightwater"), which is context the first section benefits from. In
+    the cross-cutting guides it is a line like "An honest assessment rather
+    than a promotional one", which answers nothing by itself.
+    """
+    title = ""
+    sections: list[tuple[str, str]] = []
+    heading = "Overview"
+    cursor = 0
+
+    for match in _HEADING.finditer(text):
+        body = text[cursor : match.start()].strip()
+        if body:
+            sections.append((heading, body))
+        if match.group(1) == "#" and not title:
+            title = match.group(2)
+        else:
+            heading = match.group(2)
+        cursor = match.end()
+
+    body = text[cursor:].strip()
+    if body:
+        sections.append((heading, body))
+
+    if len(sections) > 1 and sections[0][0] == "Overview":
+        intro = sections.pop(0)[1]
+        first_heading, first_body = sections[0]
+        sections[0] = (first_heading, f"{intro}\n\n{first_body}")
+    return title, sections
+
+
+def _pack(pieces: list[str], limit: int, joiner: str) -> list[str]:
+    """Greedily join pieces into groups no longer than `limit` characters."""
+    groups: list[str] = []
+    current = ""
+    for piece in pieces:
+        candidate = f"{current}{joiner}{piece}" if current else piece
+        if current and len(candidate) > limit:
+            groups.append(current)
+            current = piece
+        else:
+            current = candidate
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _split_long(body: str, limit: int, overlap: int) -> list[str]:
+    """
+    Cut a section that is too long for one chunk.
+
+    Paragraph breaks first, then sentence ends. Never mid-sentence. When a
+    section has to be cut, the last `overlap` characters' worth of whole
+    sentences from one piece are repeated at the start of the next, so a
+    thought that spans the cut is still readable from either side.
+    """
+    if len(body) <= limit:
+        return [body]
+
+    pieces: list[str] = []
+    for paragraph in body.split("\n\n"):
+        if len(paragraph) <= limit:
+            pieces.append(paragraph)
+        else:
+            sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+            pieces.extend(_pack(sentences, limit, " "))
+
+    groups = _pack(pieces, limit, "\n\n")
+    if overlap <= 0:
+        return groups
+
+    with_overlap = [groups[0]]
+    for previous, group in zip(groups, groups[1:]):
+        tail = ""
+        for sentence in reversed(re.split(r"(?<=[.!?])\s+", previous)):
+            if len(tail) + len(sentence) > overlap:
+                break
+            tail = f"{sentence} {tail}".strip()
+        with_overlap.append(f"{tail}\n\n{group}" if tail else group)
+    return with_overlap
+
+
 def split_documents(documents: list[Document]) -> list[Chunk]:
     """
-    Split documents into chunks. ⚠️ REPLACE THE BODY OF THIS IN MILESTONE 3.
+    One chunk per `## ` section, labelled with the guide and section it is from.
 
-    Right now it just calls the fallback. That is the plain, generic behaviour
-    the brief is talking about.
+    The city guides are organised by heading: every town guide has the same
+    sections (Getting there, Getting around, Eat and drink, ...), and a
+    question like "how do I get to Kestrelford?" is answered by exactly one of
+    them. Sections run 175 to 710 characters, so a section already is the
+    right-sized unit, and the fixed-size fallback was slicing straight through
+    them.
 
-    When you write your own strategy, set `produced_by` to
-    "chunker.py::split_documents" so your README's Sample Chunks section names
-    the right function. `app.py chunks` prints that string for you.
+    Every chunk starts with "<guide title> > <section heading>". Without it,
+    "Getting there" in Kestrelford and "Getting there" in Halden Bay read
+    almost the same, and a chunk about bus times would not say which town
+    the buses go to.
 
-    Things worth thinking about before you write any code:
-      - Are your documents short posts or long guides?
-      - Is the useful information in one sentence, or spread over a paragraph?
-      - Would splitting on paragraph breaks keep more thoughts intact than
-        splitting on a character count?
+    A section longer than config.CHUNK_SIZE is cut at paragraph, then
+    sentence, boundaries with config.CHUNK_OVERLAP characters of whole
+    sentences repeated across the cut. Nothing in city_guides is that long
+    today; this is here so a longer guide doesn't silently become one giant
+    chunk.
     """
-    return fallback_split(documents)
+    chunks: list[Chunk] = []
+    for doc in documents:
+        title, sections = _sections(doc.text)
+        title = title or doc.source
+        index = 0
+        for heading, body in sections:
+            label = f"{title} > {heading}"
+            for piece in _split_long(body, config.CHUNK_SIZE, config.CHUNK_OVERLAP):
+                chunks.append(
+                    Chunk(
+                        text=f"{label}\n\n{piece}",
+                        source=doc.source,
+                        index=index,
+                        produced_by="chunker.py::split_documents",
+                    )
+                )
+                index += 1
+    return chunks
 
 
 def describe(chunks: list[Chunk]) -> str:

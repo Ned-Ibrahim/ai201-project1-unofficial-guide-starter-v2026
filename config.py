@@ -24,11 +24,17 @@ CORPUS = os.getenv("AI201_CORPUS", "city_guides")
 
 
 # ─── Chunking (Milestone 3) ──────────────────────────────────────────────────
-# These are deliberately plain, generic numbers. Milestone 3 is where you
-# replace them with numbers that fit the documents you actually read.
+# split_documents makes one chunk per `## ` section of a guide. These two
+# numbers only matter for a section too long to be one chunk.
+#
+# city_guides sections run 175 to 710 characters (the longest is the
+# "Straightforward" list in guide_accessibility.md), so 900 keeps every
+# existing section whole with room for the "Guide > Section" label on top.
+# A longer section is cut at sentence ends and repeats up to 150 characters,
+# about one sentence in these guides, across the cut.
 
-CHUNK_SIZE = 800        # characters per chunk
-CHUNK_OVERLAP = 120     # characters shared between neighbouring chunks
+CHUNK_SIZE = 900        # most characters of body text per chunk
+CHUNK_OVERLAP = 150     # whole sentences repeated across a forced cut
 
 
 # ─── Retrieval (Milestone 4) ─────────────────────────────────────────────────

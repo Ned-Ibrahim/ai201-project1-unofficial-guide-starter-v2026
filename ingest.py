@@ -37,7 +37,68 @@ def clean_text(raw: str) -> str:
     # Collapse repeated spaces and tabs, but keep line structure intact.
     text = re.sub(r"[ \t]{2,}", " ", text)
 
-    return text.strip()
+    # Markdown bold/italic markers are formatting, not content.
+    text = re.sub(r"\*{1,2}([^*\n]+)\*{1,2}", r"\1", text)
+
+    return _unwrap(text).strip()
+
+
+def _is_structural(line: str) -> bool:
+    """Headings, list items, quotes and thread markers keep their own line."""
+    stripped = line.strip()
+    return (
+        not stripped
+        or stripped.startswith(("#", "-", "*", ">", "|"))
+        or stripped.endswith("---")
+        or re.match(r"^\d+\. ", stripped) is not None
+    )
+
+
+def _unwrap(text: str) -> str:
+    """
+    Join hard-wrapped prose lines back into one line per paragraph.
+
+    Some guides wrap at 80 columns and some don't, so the same kind of
+    paragraph would otherwise show up in chunks looking two different ways.
+    """
+    out: list[str] = []
+    for line in text.split("\n"):
+        if out and not _is_structural(out[-1]) and not _is_structural(line):
+            out[-1] = f"{out[-1]} {line.strip()}"
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+# A section whose body appears word for word in this many documents is a
+# template the corpus author pasted everywhere, not information about any one
+# place. In city_guides every town guide ends with the same "Practical notes"
+# paragraph, which even names Brightwater as the nearest hospital inside the
+# Brightwater and Marchwood guides.
+BOILERPLATE_MIN_DOCS = 3
+
+_SECTION = re.compile(r"(?ms)^## [^\n]*\n+(.*?)(?=^## |\Z)")
+
+
+def strip_repeated_sections(documents: list["Document"]) -> list["Document"]:
+    """Drop any `## ` section whose body is repeated across many documents."""
+    seen: dict[str, int] = {}
+    for doc in documents:
+        for body in {m.group(1).strip() for m in _SECTION.finditer(doc.text)}:
+            seen[body] = seen.get(body, 0) + 1
+
+    repeated = {body for body, count in seen.items() if count >= BOILERPLATE_MIN_DOCS}
+    if not repeated:
+        return documents
+
+    cleaned = []
+    for doc in documents:
+        text = _SECTION.sub(
+            lambda m: "" if m.group(1).strip() in repeated else m.group(0),
+            doc.text,
+        )
+        cleaned.append(Document(source=doc.source, text=text.strip()))
+    return cleaned
 
 
 def load_documents(corpus: str | None = None) -> list[Document]:
@@ -67,7 +128,7 @@ def load_documents(corpus: str | None = None) -> list[Document]:
     if not documents:
         raise ValueError(f"{folder} has no .txt or .md files in it.")
 
-    return documents
+    return strip_repeated_sections(documents)
 
 
 def describe(documents: list[Document]) -> str:
