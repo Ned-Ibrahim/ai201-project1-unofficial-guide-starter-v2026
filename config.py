@@ -39,6 +39,9 @@ CHUNK_OVERLAP = 150     # whole sentences repeated across a forced cut
 
 # ─── Retrieval (Milestone 4) ─────────────────────────────────────────────────
 
+# 5, not 3: for "which town is easiest with limited mobility?" the chunk that
+# names Thornby Wells comes back 4th, behind two Corry Vale chunks that match
+# the words "getting around" without answering the question.
 TOP_K = 5               # how many chunks to pull back per question
 
 # The relevance gate. If the best chunk is further away than this, the system
@@ -46,10 +49,13 @@ TOP_K = 5               # how many chunks to pull back per question
 #
 # LOWER IS BETTER: 0.3 is a close match, 0.9 is unrelated.
 #
-# 0.6 is a reasonable starting point, not a right answer. Milestone 4 has you
-# measure your own two groups of distances and put the cutoff in the gap.
-# Most corpora land somewhere between 0.45 and 0.75.
-THRESHOLD = 0.6
+# Measured on city_guides with split_documents: the five test questions came
+# back with best distances 0.234 to 0.641, and the five OUT_OF_SCOPE questions
+# 0.840 to 0.997. The starter's 0.6 sat inside the in-corpus group and refused
+# "Why do visitors get confused using the buses?" (0.641), which the regional
+# transport guide answers. 0.75 sits near the middle of the 0.641 to 0.840 gap,
+# about 0.1 clear of each side.
+THRESHOLD = 0.75
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────

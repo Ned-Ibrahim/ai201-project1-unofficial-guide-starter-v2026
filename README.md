@@ -110,20 +110,33 @@ Cycling is pleasant on the river path and the trackbed, and unpleasant on Mill R
 ```
 ```
 
-**My relevance cutoff:**
+**My relevance cutoff:** 0.75 (`THRESHOLD` in `config.py`), with `TOP_K = 5`.
 
-<!-- The number you set in config.py, and how you got there.
-
-     You ran five questions your corpus covers and the five in OUT_OF_SCOPE
-     that it clearly doesn't, and wrote down the best distance for each. What
-     did those two groups look like? Where was the gap? Put the actual numbers
-     here — the table below wants all ten rows.
-
-     Milestone 4. -->
+I ran my five test questions and the five `OUT_OF_SCOPE` questions through `python app.py retrieve` and wrote down the best distance for each.
 
 | Question | In corpus? | Best distance |
 |---|---|---|
-|  |  |  |
+| How often do buses run from Brightwater to Kestrelford on weekdays? | Yes | 0.234 |
+| By what time do the Halden Bay car parks fill up on summer weekends? | Yes | 0.290 |
+| How late do kitchens serve in Marchwood on Fridays and Saturdays? | Yes | 0.313 |
+| Which town in the region is easiest to get around with limited mobility? | Yes | 0.518 |
+| Why do visitors get confused using the buses in the region? | Yes | 0.641 |
+| What is the capital of Mongolia? | No | 0.848 |
+| How do I change the oil in a diesel engine? | No | 0.905 |
+| Who won the 1994 World Cup? | No | 0.997 |
+| What is the recommended dosage of ibuprofen for a headache? | No | 0.840 |
+| How do I write a for loop in Rust? | No | 0.859 |
+
+The in-corpus group runs 0.234 to 0.641 and the out-of-corpus group runs 0.840 to 0.997, so the gap is 0.641 to 0.840.
+I put the cutoff at 0.75, near the middle, about 0.1 clear of each side.
+
+The starter's 0.6 was wrong for this corpus.
+It would have refused "Why do visitors get confused using the buses?" (0.641), which `guide_regional_transport.md` answers directly: three bus operators that don't accept each other's tickets.
+That question scores worst because it uses none of the guide's own words ("confused" never appears), so it is the one I expect to drift first if I reword anything.
+
+Top-k stays at 5.
+For the limited-mobility question, the chunk that names Thornby Wells (`guide_accessibility.md`, "Straightforward") comes back 4th at 0.582, behind two Corry Vale "Getting around" chunks that share words with the question but don't answer it.
+At top-k 3 the answer would never reach the model.
 
 ## How I Used AI
 
