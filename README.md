@@ -183,10 +183,6 @@ I have used AI to help me travers and understand the higher objective. It helped
 
 # Unit 2
 
-<!-- These sections get ADDED to what's already above. Don't delete or rewrite
-     unit 1 — the point is that someone can see what you said before you knew
-     how it went. -->
-
 ## Run Log — Before
 
 `python run_eval.py --label before` asked each of my five questions three times with the response cache off, and put the five `OUT_OF_SCOPE` questions through the gate once.
@@ -282,7 +278,7 @@ Each verdict is against the target written in `criteria.md` in unit 1, unchanged
 | 5 | Q3 says midnight not 9pm, Q4 says Thornby Wells, every run | MET | 6 of 6. No Q3 answer mentions 9pm at all, so there was no borderline case to judge. |
 
 **Arguing the other side.**
-The strongest case against these verdicts is not that any number is wrong but that three of the five targets were close to guaranteed when I wrote them.
+The numbers are right. The strongest case against these verdicts is that three of the five targets were close to guaranteed when I wrote them.
 Criterion 4 measured the chunker's own design rule.
 Criterion 3 had a 0.09 margin I had already measured.
 Criterion 1 at top-k 5 counts an answer buried at rank 4 as a success.
@@ -334,7 +330,7 @@ The chunk that wins shares the question's topic words and place name, and the ch
   "Until midnight on Fridays and Saturdays" is in "Marchwood > Eat and drink", 0.006 further away.
 - Q4: "Corry Vale > Getting around" wins on the literal words "getting around", which my own `Guide > Section` header puts at the top of every Getting around chunk.
   The answering chunk's header ends in "Straightforward", a word the question never uses.
-  This one is partly a chunking effect: the header I added to disambiguate towns also amplifies section-name matches.
+  This one is partly a chunking effect: the header I added to disambiguate towns also makes section names like "Getting around" count for more.
 - Q5: "Marchwood > Getting there" wins on "bus" (the airport bus).
   The answer, three operators not accepting each other's tickets, shares no words with "confused".
 
@@ -352,7 +348,7 @@ One more Corry Vale-style distractor for Q4 and the answer falls out of the top 
 **What I changed:** hybrid search.
 `store.py::search` now ranks every chunk twice, once by meaning (cosine distance from all-MiniLM-L6-v2) and once by keywords (BM25 via `rank-bm25`), and merges the two lists with reciprocal rank fusion: `score = 1/(60 + meaning rank) + 1/(60 + keyword rank)`.
 The top 5 by that score go to the gate and the model.
-Every result keeps its real cosine distance, so the gate still compares the same kind of number against the same 0.75 cutoff.
+Every result keeps its real cosine distance, so the gate still compares a cosine distance against the same 0.75 cutoff.
 `config.HYBRID` switches it on; `False` is exactly the unit 1 system.
 
 **Why I picked it:** the diagnosis found the answer chunk ranked first for only 1 of 5 questions because the embedding ranks by topic, and BM25 ranks by the exact words ("Fridays", "limited mobility", "buses") the embedding glides past.
@@ -403,7 +399,7 @@ Q4 run 3: Thornby Wells is the easiest town in the region for getting around wit
 Yes for retrieval ordering, and invisibly to my five criteria.
 The answer chunk now ranks first for 4 of 5 questions instead of 1 of 5, and the Q4 answer moved from 4th, one place from falling out of the top 5, to 1st.
 The five criteria read MET before and MET after, so by my own run log nothing changed.
-That is a finding about my criteria rather than about the fix: none of them measured rank, so they could not see the problem or the repair.
+That says more about my criteria than about the fix. None of them measured rank, so they could not see the problem or the repair.
 
 It also had two costs.
 For Q2 and Q4 the chunk nearest in meaning is no longer in the top 5, so the gate now sees a best distance of 0.344 instead of 0.290 and 0.580 instead of 0.518.
@@ -439,5 +435,5 @@ I would drop criterion 4 or make it about retrieval quality instead of chunk sha
 It restated my chunker's design, so it could not fail, and it said nothing about whether the chunks were the right size for answering.
 
 I would keep criteria 2, 3 and 5.
-Criterion 5 was the one that tested something real, whether the model used the right chunk when a wrong one ranked above it, and it is the kind of criterion I would write more of.
+Criterion 5 was the one that tested something real, whether the model used the right chunk when a wrong one ranked above it, and I would write more criteria like it.
 
