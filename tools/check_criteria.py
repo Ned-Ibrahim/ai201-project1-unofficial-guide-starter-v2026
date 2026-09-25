@@ -54,7 +54,7 @@ def criterion_1() -> tuple[int, list[str]]:
         ranks = [i for i, r in enumerate(results, 1) if contains(r.text, item["expects"])]
         hits += bool(ranks)
         where = f"rank {ranks[0]}" if ranks else "not retrieved"
-        lines.append(f"    {where:<14} best {results[0].distance:.3f}  {item['question']}")
+        lines.append(f"    {where:<14} best {min(r.distance for r in results):.3f}  {item['question']}")
     return hits, lines
 
 

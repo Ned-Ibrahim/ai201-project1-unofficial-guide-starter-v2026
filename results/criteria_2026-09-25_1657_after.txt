@@ -1,0 +1,14 @@
+1. Retrieved chunk contains the answer: 5/5 (deterministic, same every run)
+    rank 1         best 0.234  How often do buses run from Brightwater to Kestrelford on weekdays?
+    rank 1         best 0.344  By what time do the Halden Bay car parks fill up on summer weekends?
+    rank 2         best 0.313  How late do kitchens serve in Marchwood on Fridays and Saturdays?
+    rank 1         best 0.580  Which town in the region is easiest to get around with limited mobility?
+    rank 1         best 0.641  Why do visitors get confused using the buses in the region?
+2. Run 1: 5/5 generated answers name a source
+2. Run 2: 5/5 generated answers name a source
+2. Run 3: 5/5 generated answers name a source
+3. Gate refused 5/5 out-of-scope questions (deterministic)
+4. 75/75 chunks pass header, length and sentence-end checks
+5. Run 1: 2/2
+5. Run 2: 2/2
+5. Run 3: 2/2

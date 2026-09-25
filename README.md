@@ -349,48 +349,95 @@ One more Corry Vale-style distractor for Q4 and the answer falls out of the top 
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** hybrid search.
+`store.py::search` now ranks every chunk twice, once by meaning (cosine distance from all-MiniLM-L6-v2) and once by keywords (BM25 via `rank-bm25`), and merges the two lists with reciprocal rank fusion: `score = 1/(60 + meaning rank) + 1/(60 + keyword rank)`.
+The top 5 by that score go to the gate and the model.
+Every result keeps its real cosine distance, so the gate still compares the same kind of number against the same 0.75 cutoff.
+`config.HYBRID` switches it on; `False` is exactly the unit 1 system.
 
-**Why I picked it:**
+**Why I picked it:** the diagnosis found the answer chunk ranked first for only 1 of 5 questions because the embedding ranks by topic, and BM25 ranks by the exact words ("Fridays", "limited mobility", "buses") the embedding glides past.
 
-<!-- Connect it to a specific diagnosis above in one sentence. If you can't,
-     you picked a fix because it sounded impressive. -->
+**Other commits in this unit, and why they are not a second change.**
+Before the baseline could run at all I fixed three things in the test harness: the rate limiter (`config.REQUESTS_PER_MINUTE`, `generate.py::_server_retry_delay`), `tools/smoke_test.py` overwriting the real index, and the smoke test's ordering check once hybrid existed.
+I also added `tools/check_criteria.py` to count each criterion.
+None of these changes what the system retrieves, gates, or generates for a question.
 
 ### Run Log — After
 
-<!-- Same format, same five criteria, three runs each.
-     `python run_eval.py --label after` -->
+Raw log: `results/run_2026-09-25_1657_after.md`.
+Per-criterion counts: `results/criteria_2026-09-25_1657_after.txt`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 4. Chunks: unique header, 150 to 900 chars, end on a sentence | 75 of 75 | 75/75 | 75/75 | 75/75 | MET |
+| 5. Q3 says midnight (not 9pm), Q4 says Thornby Wells | 2 of 2 every run | 2/2 | 2/2 | 2/2 | MET |
+
+**Before and after on the thing the change was aimed at**, from `tools/check_criteria.py::criterion_1` (rank of the first retrieved chunk containing the `expects` phrase):
+
+| Question | Rank before | Rank after | Best distance before | Best distance after |
+|---|---|---|---|---|
+| Q1 Kestrelford buses | 1 | 1 | 0.234 | 0.234 |
+| Q2 Halden Bay car parks | 2 | **1** | 0.290 | 0.344 |
+| Q3 Marchwood kitchens | 2 | 2 | 0.313 | 0.313 |
+| Q4 limited mobility | 4 | **1** | 0.518 | 0.580 |
+| Q5 bus confusion | 2 | **1** | 0.641 | 0.641 |
+| **Answer at rank 1** | **1 of 5** | **4 of 5** | | |
+
+Out-of-scope best distances after: 0.848, 0.905, 1.008, 0.840, 0.859 (before: 0.848, 0.905, 0.997, 0.840, 0.859).
+
+Real output, criterion 5 after, all three runs:
+
+```
+Q3 run 1: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q3 run 2: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q3 run 3: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q4 run 1: Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+Q4 run 2: Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within a three-minute walk.
+Q4 run 3: Thornby Wells is the easiest town in the region for getting around with limited mobility because it is flat, compact, and everything is within a three-minute walk.
+```
 
 **Did it help?**
+Yes for retrieval ordering, and invisibly to my five criteria.
+The answer chunk now ranks first for 4 of 5 questions instead of 1 of 5, and the Q4 answer moved from 4th, one place from falling out of the top 5, to 1st.
+The five criteria read MET before and MET after, so by my own run log nothing changed.
+That is a finding about my criteria rather than about the fix: none of them measured rank, so they could not see the problem or the repair.
 
-<!-- Say plainly whether it did, and how you know. If it made things worse,
-     say that — a change that backfired, honestly reported, earns full credit
-     and is more interesting than one that worked. What matters is that you can
-     tell.
-
-     Milestone 4. -->
+It also had two costs.
+For Q2 and Q4 the chunk nearest in meaning is no longer in the top 5, so the gate now sees a best distance of 0.344 instead of 0.290 and 0.580 instead of 0.518.
+Both are still far under 0.75, but hybrid search pushes in-corpus questions toward the cutoff, never away from it.
+And Q2's answer now cites three files instead of two, because the regional transport guide's "Both Halden Bay lots fill by 10am on summer weekends" made it into the top 5; that citation is correct, just longer.
 
 ## What's Still Broken
 
-<!-- For each criterion still missed after your fix: what you'd do about it,
-     and why you stopped where you did.
+**No criterion is missed**, before or after, so there is no failing criterion to carry forward.
+What is still wrong:
 
-     "I ran out of time" is fine if it's true. Pretending nothing is left is
-     not.
-
-     Milestone 5. -->
+- **Q3 still ranks the wrong chunk first.**
+  The meaning ranking puts "Eating across the region > Opening hours" 1st and "Marchwood > Eat and drink" 2nd, and BM25 puts them the other way round.
+  Reciprocal rank fusion then gives both exactly 1/61 + 1/62, and the tie falls back to the meaning order.
+  The model still answers correctly because the grounding prompt tells it to check which town an excerpt is about.
+  To fix it I would weight BM25 higher for questions that name a town, or boost a chunk whose header names the town in the question.
+  I stopped here because either is a second change, and this unit allows one.
+- **The gate margin got smaller.**
+  Q4's best distance moved from 0.518 to 0.580.
+  Hybrid search can only ever raise the best distance the gate sees, since it may drop the nearest chunk from the top 5.
+  I would gate on the nearest chunk overall rather than the nearest one returned, which keeps the unit 1 cutoff meaning exactly what it did.
+- **Paraphrase drift.**
+  In two of three Q4 runs after the change the model wrote "within a three-minute walk"; the guide says "within three minutes of everything else".
+  It is a small change in meaning that no criterion catches.
+  A criterion checking that stated numbers appear word for word in the cited file would.
 
 ## What I'd Do Differently
 
-<!-- Knowing what you know now — which of your five criteria would you write
-     differently, and why?
+I would rewrite criterion 1 to measure rank instead of presence: "for at least 4 of 5 questions, the top-ranked chunk contains the answer."
+As written it passed 5 of 5 while the answer sat first for only 1 question, and it could not tell before from after.
 
-     Milestone 5. -->
+I would drop criterion 4 or make it about retrieval quality instead of chunk shape.
+It restated my chunker's design, so it could not fail, and it said nothing about whether the chunks were the right size for answering.
+
+I would keep criteria 2, 3 and 5.
+Criterion 5 was the one that tested something real, whether the model used the right chunk when a wrong one ranked above it, and it is the kind of criterion I would write more of.
+
