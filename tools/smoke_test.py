@@ -26,6 +26,16 @@ os.environ.setdefault("GEMINI_API_KEY", "smoke-test-not-a-real-key")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
+
+# Stand-in embeddings are random, so an index built here is noise. Build it
+# somewhere throwaway: writing into the real chroma_db/ replaced every
+# corpus's `default` index, and the next real run_eval retrieved garbage
+# (best distances ~0.9 for questions that normally score 0.23-0.64).
+# Same for the response cache, which would otherwise hold fake answers.
+_scratch = Path(tempfile.mkdtemp(prefix="ai201-smoke-"))
+config.CHROMA_DIR = _scratch / "chroma_db"
+config.CACHE_DIR = _scratch / ".cache"
+
 import generate  # noqa: E402
 from ingest import load_documents  # noqa: E402
 from chunker import split_documents, fallback_split  # noqa: E402
