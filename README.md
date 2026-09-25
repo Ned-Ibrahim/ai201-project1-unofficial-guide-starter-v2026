@@ -195,11 +195,11 @@ Raw log: `results/run_2026-09-25_1652_before.md`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | |
-| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | |
-| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | |
-| 4. Chunks: unique header, 150 to 900 chars, end on a sentence | 75 of 75 | 75/75 | 75/75 | 75/75 | |
-| 5. Q3 says midnight (not 9pm), Q4 says Thornby Wells | 2 of 2 every run | 2/2 | 2/2 | 2/2 | |
+| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 4. Chunks: unique header, 150 to 900 chars, end on a sentence | 75 of 75 | 75/75 | 75/75 | 75/75 | MET |
+| 5. Q3 says midnight (not 9pm), Q4 says Thornby Wells | 2 of 2 every run | 2/2 | 2/2 | 2/2 | MET |
 
 Criteria 1, 3 and 4 are deterministic (retrieval, a fixed cutoff, and the chunker), so one pass is the measurement and the same number goes in all three columns.
 Criteria 2 and 5 depend on generated text and were counted separately for each run.
@@ -207,7 +207,7 @@ Criteria 2 and 5 depend on generated text and were counted separately for each r
 **How the runs went.**
 The first attempt crashed on call 15 with `429 RESOURCE_EXHAUSTED`: `config.REQUESTS_PER_MINUTE` was 30 but the free tier for `gemini-3.5-flash-lite` allows 15, and the retry gave up after 15 seconds while the server asked for 50.
 The second attempt returned best distances around 0.9 for every question, because `tools/smoke_test.py` had rebuilt the real index with random stand-in embeddings.
-I discarded that run, fixed both harness problems (commits `98fddd7` and the smoke-test commit after it), re-indexed, and re-ran.
+I discarded that run, fixed both harness problems (commits `98fddd7` and `292a559`), re-indexed, and re-ran.
 Neither fix touches retrieval, the gate, or the prompt, so the system under test is the one I submitted in unit 1.
 
 ### Real output
@@ -271,22 +271,24 @@ Q4 run 3: Thornby Wells is the easiest town in the region to get around with lim
 
 ## Verdicts
 
-<!-- MET or MISSED for each of the five, against the target you wrote last
-     unit — not a new one. Plus a sentence on how you decided. That sentence
-     matters most where it was close.
-
-     If your target said 4 of 5 and your runs came out 4, 3, 4, that's a MISS.
-     The target has to hold, not show up occasionally.
-
-     Milestone 2. -->
+Each verdict is against the target written in `criteria.md` in unit 1, unchanged.
 
 | # | Criterion | Verdict | How I decided |
 |---|---|---|---|
-| 1 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
-| 4 |  |  |  |
-| 5 |  |  |  |
+| 1 | Retrieved chunks contain the answer, 4 of 5 | MET | 5 of 5 questions had a retrieved chunk containing the `expects` phrase. It is closer than 5/5 looks: Q4's answer is the 4th of 5 chunks, so at top-k 3 this would have been 4/5, one question from a miss. |
+| 2 | Every answer names a source | MET | 15 of 15 generated answers end with a `Source:` line naming a real file, and each named file contains the fact stated. No refusals happened, so the exclusion in my reason never came into play. |
+| 3 | Gate refuses out-of-corpus questions, 4 of 5 | MET | All 5 refused. The closest was ibuprofen at 0.840, 0.09 above the 0.75 cutoff. |
+| 4 | 75 chunks, unique header, 150 to 900 characters, sentence end | MET | 75 of 75 pass, shortest 188, longest 871. This one could not have missed: the chunker was built to produce exactly this, and my reason says so. |
+| 5 | Q3 says midnight not 9pm, Q4 says Thornby Wells, every run | MET | 6 of 6. No Q3 answer mentions 9pm at all, so there was no borderline case to judge. |
+
+**Arguing the other side.**
+The strongest case against these verdicts is not that any number is wrong but that three of the five targets were close to guaranteed when I wrote them.
+Criterion 4 measured the chunker's own design rule.
+Criterion 3 had a 0.09 margin I had already measured.
+Criterion 1 at top-k 5 counts an answer buried at rank 4 as a success.
+The verdicts stand, because the targets are the ones I wrote, but the Diagnoses section treats the near-misses as the real findings.
+
+No criterion was revised: every one could be measured as written, and `tools/check_criteria.py` measures each one the same way every time.
 
 ## Diagnoses
 
