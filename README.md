@@ -292,23 +292,60 @@ No criterion was revised: every one could be measured as written, and `tools/che
 
 ## Diagnoses
 
-<!-- For each miss: which stage caused it, and how. The stage alone isn't
-     enough — you need the mechanism.
+**I missed nothing.**
+All five criteria were met in all three runs, so there is no failed criterion to diagnose.
 
-     Not a diagnosis: "Question 3 didn't work."
-     A diagnosis:     "Question 3 asks about laundry costs. The answer is in
-                       one sentence that got split across two chunks, so
-                       neither chunk on its own contains it."
+**Were my targets set low? Partly, yes.**
+Criterion 4 could not fail, since it restates the chunker's design.
+Criterion 3's 4 of 5 left room for a miss that my own distances said would not happen.
+Criterion 1 is the one I would tighten, because it hides the real weakness in this system.
+Written as "the **top-ranked** chunk contains the answer for at least 4 of 5 questions", it would have been **MISSED at 1 of 5** in every run.
 
-     The five stages: loading → chunking → embedding → retrieval → generation.
+**The near-miss: the answer is almost never the closest chunk.**
+Printing all five retrieved chunks per question (`*` marks the chunk containing the `expects` phrase):
 
-     Look for a pattern. If three misses all ask about numbers, that's one
-     problem, not three.
+```
+By what time do the Halden Bay car parks fill up on summer weekends?
+  1 0.290   Halden Bay > When to go
+  2 0.344 * When to visit the region > Summer, June to August
+  3 0.385 * Halden Bay > Getting there
+How late do kitchens serve in Marchwood on Fridays and Saturdays?
+  1 0.313   Eating across the region > Opening hours
+  2 0.319 * Marchwood > Eat and drink
+Which town in the region is easiest to get around with limited mobility?
+  1 0.518   Corry Vale > Getting around
+  2 0.530   Corry Vale > Getting there
+  3 0.580   Getting around the region with limited mobility > Difficult
+  4 0.582 * Getting around the region with limited mobility > Straightforward
+Why do visitors get confused using the buses in the region?
+  1 0.641   Marchwood > Getting there
+  2 0.648 * Getting around the region > Buses
+```
 
-     Missed nothing? Say so, then say honestly whether your targets were set
-     low, and which one you'd tighten and to what.
+Only the Kestrelford bus question has its answer at rank 1.
 
-     Milestone 3. -->
+**Stage: embedding, showing up at retrieval.**
+The mechanism is the same in all four cases.
+The chunk that wins shares the question's topic words and place name, and the chunk that answers holds the specific fact the question turns on.
+
+- Q2: "Halden Bay > When to go" wins on Halden Bay + summer + parking ("the parking problem becomes the defining feature").
+  The time, "fill by 10am", is in "Getting there", ranked 3rd.
+- Q3: "Eating across the region > Opening hours" wins on kitchens + serving + Marchwood, and that chunk says kitchens stop at 9pm.
+  "Until midnight on Fridays and Saturdays" is in "Marchwood > Eat and drink", 0.006 further away.
+- Q4: "Corry Vale > Getting around" wins on the literal words "getting around", which my own `Guide > Section` header puts at the top of every Getting around chunk.
+  The answering chunk's header ends in "Straightforward", a word the question never uses.
+  This one is partly a chunking effect: the header I added to disambiguate towns also amplifies section-name matches.
+- Q5: "Marchwood > Getting there" wins on "bus" (the airport bus).
+  The answer, three operators not accepting each other's tickets, shares no words with "confused".
+
+all-MiniLM-L6-v2 turns each 200 to 800 character chunk into one 384-number vector, and that vector is dominated by what the chunk is about.
+A single decisive detail (a time, a town name in a list, "operators") barely moves it.
+So the model ranks by topic and gets the topic right, but the ordering within a topic is close to a coin flip: 0.006 and 0.007 separate rank 1 from the answer in Q3 and Q5.
+
+**Why it has not broken anything yet.**
+Top-k 5 is wide enough to catch rank 4, and the grounding prompt makes the model read past the wrong-town and wrong-time chunks.
+Both are safety nets for a retrieval ordering problem, and the model is doing work retrieval should have done.
+One more Corry Vale-style distractor for Q4 and the answer falls out of the top 5.
 
 ## The Improvement
 
