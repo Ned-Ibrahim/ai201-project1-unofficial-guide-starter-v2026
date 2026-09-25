@@ -189,27 +189,85 @@ I have used AI to help me travers and understand the higher objective. It helped
 
 ## Run Log — Before
 
-<!-- Your five criteria, three runs each. `python run_eval.py --label before`
-     runs the questions, puts the OUT_OF_SCOPE ones through the gate, and
-     writes it all into results/ for you. Targets come from criteria.md; the
-     verdict column is your call.
-
-     Criterion 3 is measured in one deterministic pass rather than three, so
-     the same number goes in all three run columns. That's correct, not lazy.
-
-     Milestone 1. -->
+`python run_eval.py --label before` asked each of my five questions three times with the response cache off, and put the five `OUT_OF_SCOPE` questions through the gate once.
+Raw log: `results/run_2026-09-25_1652_before.md`.
+`python tools/check_criteria.py` turned that per-question log into the per-criterion counts below: `results/criteria_2026-09-25_1652_before.txt`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | |
+| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | |
+| 4. Chunks: unique header, 150 to 900 chars, end on a sentence | 75 of 75 | 75/75 | 75/75 | 75/75 | |
+| 5. Q3 says midnight (not 9pm), Q4 says Thornby Wells | 2 of 2 every run | 2/2 | 2/2 | 2/2 | |
 
-<!-- Underneath, paste the REAL output for each criterion from one of your
-     runs — the actual text your system produced, not a description of it.
-     Name the file and function that produced it. -->
+Criteria 1, 3 and 4 are deterministic (retrieval, a fixed cutoff, and the chunker), so one pass is the measurement and the same number goes in all three columns.
+Criteria 2 and 5 depend on generated text and were counted separately for each run.
+
+**How the runs went.**
+The first attempt crashed on call 15 with `429 RESOURCE_EXHAUSTED`: `config.REQUESTS_PER_MINUTE` was 30 but the free tier for `gemini-3.5-flash-lite` allows 15, and the retry gave up after 15 seconds while the server asked for 50.
+The second attempt returned best distances around 0.9 for every question, because `tools/smoke_test.py` had rebuilt the real index with random stand-in embeddings.
+I discarded that run, fixed both harness problems (commits `98fddd7` and the smoke-test commit after it), re-indexed, and re-ran.
+Neither fix touches retrieval, the gate, or the prompt, so the system under test is the one I submitted in unit 1.
+
+### Real output
+
+**Criterion 1**, from `tools/check_criteria.py::criterion_1` (runs `store.py::search`, top-k 5, and `scorer.py::retrieved_contains` on each chunk):
+
+```
+1. Retrieved chunk contains the answer: 5/5 (deterministic, same every run)
+    rank 1         best 0.234  How often do buses run from Brightwater to Kestrelford on weekdays?
+    rank 2         best 0.290  By what time do the Halden Bay car parks fill up on summer weekends?
+    rank 2         best 0.313  How late do kitchens serve in Marchwood on Fridays and Saturdays?
+    rank 4         best 0.518  Which town in the region is easiest to get around with limited mobility?
+    rank 2         best 0.641  Why do visitors get confused using the buses in the region?
+```
+
+**Criterion 2**, run 1, from `generate.py::answer_from_chunks` via `run_eval.py::run_once`:
+
+```
+Buses run from Brightwater to Kestrelford roughly hourly on weekdays.
+Source: guide_kestrelford.md
+
+On summer weekends, parking in the town itself fills by 10am.
+Source: guide_halden_bay.md, guide_seasons.md
+
+In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Source: guide_marchwood.md
+
+Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+Source: guide_accessibility.md
+
+Visitors get confused because three operators run in the region and they do not accept each other's tickets.
+Source: guide_regional_transport.md
+```
+
+**Criterion 3**, from `run_eval.py::check_out_of_scope`, cutoff 0.75:
+
+```
+| What is the capital of Mongolia? | 0.848 | refused |
+| How do I change the oil in a diesel engine? | 0.905 | refused |
+| Who won the 1994 World Cup? | 0.997 | refused |
+| What is the recommended dosage of ibuprofen for a headache? | 0.840 | refused |
+| How do I write a for loop in Rust? | 0.859 | refused |
+```
+
+**Criterion 4**, from `tools/check_criteria.py::criterion_4` over `chunker.py::split_documents`:
+
+```
+4. 75/75 chunks pass header, length and sentence-end checks
+```
+
+**Criterion 5**, all three runs, from `generate.py::answer_from_chunks`:
+
+```
+Q3 run 1: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q3 run 2: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q3 run 3: In Marchwood, kitchens serve until midnight on Fridays and Saturdays.
+Q4 run 1: Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+Q4 run 2: Thornby Wells is the easiest town in the region for limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+Q4 run 3: Thornby Wells is the easiest town in the region to get around with limited mobility because it is flat, compact, and everything is within three minutes of everything else.
+```
 
 ## Verdicts
 
