@@ -178,18 +178,89 @@ def build_index(
     return len(chunks)
 
 
+def _to_result(text: str, meta: dict, distance: float) -> Result:
+    return Result(
+        text=text,
+        source=str(meta.get("source", "unknown")),
+        label=f"{meta.get('source', 'unknown')}#{meta.get('index', 0)}",
+        distance=float(distance),
+        produced_by=str(meta.get("produced_by", "unknown")),
+    )
+
+
+# Words that carry no signal for keyword matching in these guides. Kept short
+# on purpose: "town", "bus" and "region" stay in, because they are exactly the
+# words BM25 is here to weigh.
+_STOPWORDS = frozenset(
+    "a an and are as at be by do does for from how i in is it of on or the "
+    "to what when where which who why with".split()
+)
+
+_bm25_cache: dict[tuple[str, int], tuple] = {}
+
+
+def _tokens(text: str) -> list[str]:
+    """Lowercase words, stopwords out, plural "s" folded ("Fridays" = "friday")."""
+    import re
+
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return [
+        w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
+        for w in words
+        if w not in _STOPWORDS
+    ]
+
+
+def _keyword_ranks(collection, name: str, question: str) -> dict[str, int]:
+    """
+    Rank every chunk in the collection by BM25 against the question.
+
+    Returns {chunk id: rank}, rank 1 = best keyword match. The index is built
+    from what is already stored in Chroma, so it can never disagree with the
+    vector index about which chunks exist.
+    """
+    from rank_bm25 import BM25Okapi
+
+    key = (name, collection.count())
+    if key not in _bm25_cache:
+        stored = collection.get(include=["documents"])
+        _bm25_cache[key] = (
+            stored["ids"],
+            BM25Okapi([_tokens(doc) for doc in stored["documents"]]),
+        )
+    ids, bm25 = _bm25_cache[key]
+
+    scores = bm25.get_scores(_tokens(question))
+    order = sorted(range(len(ids)), key=lambda i: scores[i], reverse=True)
+    return {ids[i]: rank for rank, i in enumerate(order, 1)}
+
+
 def search(
     question: str,
     top_k: int | None = None,
     corpus: str | None = None,
     variant: str = "default",
+    hybrid: bool | None = None,
 ) -> list[Result]:
     """
-    Retrieve the chunks closest in meaning to a question.
+    Retrieve the chunks that best match a question.
 
-    Returns them nearest-first, each with its distance.
+    With config.HYBRID off, this is plain semantic search: nearest-first by
+    cosine distance.
+
+    With it on, every chunk is ranked twice, once by meaning (cosine distance)
+    and once by keywords (BM25), and the two rankings are merged with
+    reciprocal rank fusion: score = 1/(k + meaning rank) + 1/(k + keyword rank).
+    Unit 2's diagnosis found the answer chunk ranked first for only 1 of 5
+    questions: the embedding ranks by topic, and the words that decide the
+    answer ("Fridays", "limited mobility", "buses") barely move it. BM25
+    weighs exactly those words.
+
+    Either way, each Result keeps its real cosine distance, so the relevance
+    gate still compares like with like against the cutoff it was set with.
     """
     top_k = top_k or config.TOP_K
+    hybrid = config.HYBRID if hybrid is None else hybrid
     name = config.collection_name(corpus, variant)
 
     try:
@@ -199,25 +270,31 @@ def search(
             f"No index called '{name}'. Run `python app.py index` first."
         ) from exc
 
+    count = collection.count()
     raw = collection.query(
         query_embeddings=embed([question]),
-        n_results=min(top_k, collection.count()),
+        n_results=count if hybrid else min(top_k, count),
     )
-
-    results: list[Result] = []
-    for text, meta, distance in zip(
-        raw["documents"][0], raw["metadatas"][0], raw["distances"][0]
-    ):
-        results.append(
-            Result(
-                text=text,
-                source=str(meta.get("source", "unknown")),
-                label=f"{meta.get('source', 'unknown')}#{meta.get('index', 0)}",
-                distance=float(distance),
-                produced_by=str(meta.get("produced_by", "unknown")),
-            )
+    ids = raw["ids"][0]
+    by_id = {
+        chunk_id: _to_result(text, meta, distance)
+        for chunk_id, text, meta, distance in zip(
+            ids, raw["documents"][0], raw["metadatas"][0], raw["distances"][0]
         )
-    return results
+    }
+
+    if not hybrid:
+        return [by_id[chunk_id] for chunk_id in ids]
+
+    meaning_rank = {chunk_id: rank for rank, chunk_id in enumerate(ids, 1)}
+    keyword_rank = _keyword_ranks(collection, name, question)
+    k = config.RRF_K
+
+    def fused(chunk_id: str) -> float:
+        return 1 / (k + meaning_rank[chunk_id]) + 1 / (k + keyword_rank[chunk_id])
+
+    best = sorted(ids, key=fused, reverse=True)[:top_k]
+    return [by_id[chunk_id] for chunk_id in best]
 
 
 def index_exists(corpus: str | None = None, variant: str = "default") -> bool:

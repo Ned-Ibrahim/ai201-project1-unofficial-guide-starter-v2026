@@ -44,6 +44,14 @@ CHUNK_OVERLAP = 150     # whole sentences repeated across a forced cut
 # the words "getting around" without answering the question.
 TOP_K = 5               # how many chunks to pull back per question
 
+# Unit 2's improvement: rank chunks by keywords (BM25) as well as meaning, and
+# merge the two rankings. See store.py::search. False = unit 1's system.
+HYBRID = True
+# Reciprocal rank fusion constant. 60 is the value from the original RRF paper
+# (Cormack et al., 2009) and the common default; it stops one list's rank 1
+# from overriding everything the other list says.
+RRF_K = 60
+
 # The relevance gate. If the best chunk is further away than this, the system
 # refuses to answer instead of handing the model thin material.
 #
