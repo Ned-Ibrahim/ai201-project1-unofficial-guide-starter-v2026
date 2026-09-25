@@ -106,6 +106,22 @@ def _wait_for_slot() -> None:
         _call_times[:] = [t for t in _call_times if time.monotonic() - t < 60.0]
 
 
+def _server_retry_delay(message: str) -> float | None:
+    """
+    How long the service asked us to wait, if it said.
+
+    A 429 from the free tier carries a RetryInfo delay ("retryDelay': '50s'")
+    that can be most of a minute. Backing off 1, 2, 4, 8 seconds instead gives
+    up after 15 seconds while the quota is still exhausted.
+    """
+    import re
+
+    match = re.search(r"retryDelay'?\"?:\s*'?\"?(\d+(?:\.\d+)?)s", message)
+    if match is None:
+        match = re.search(r"retry in (\d+(?:\.\d+)?)s", message, re.IGNORECASE)
+    return float(match.group(1)) + 1.0 if match else None
+
+
 def _check_budget() -> None:
     global _budget_warned
     if _session_calls < config.SESSION_REQUEST_BUDGET:
@@ -256,7 +272,7 @@ def generate(prompt: str, system: str | None = None, cache: bool = True) -> str:
             )
             if not rate_limited:
                 raise
-            backoff = 2 ** attempt
+            backoff = _server_retry_delay(str(exc)) or 2 ** attempt
             print(
                 f"  [rate limit] service pushed back. Retrying in {backoff}s "
                 f"(attempt {attempt + 1} of {config.MAX_RETRIES}).",

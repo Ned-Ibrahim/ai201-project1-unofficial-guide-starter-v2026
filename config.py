@@ -77,7 +77,10 @@ MODEL = os.getenv("AI201_MODEL", "gemini-3.5-flash-lite")
 # You should not need to touch these. They exist so that a runaway loop costs
 # you a warning instead of your whole day's allowance.
 
-REQUESTS_PER_MINUTE = 30       # outgoing calls the limiter will allow per minute
+# The free tier for gemini-3.5-flash-lite allows 15 requests per minute per
+# project (the 429 body says quotaValue '15'). 30 let a 15-question eval run
+# straight into the wall. 14 leaves one spare for anything else on the key.
+REQUESTS_PER_MINUTE = 14       # outgoing calls the limiter will allow per minute
 SESSION_REQUEST_BUDGET = 300   # stop and warn rather than draining the daily quota
 MAX_RETRIES = 4                # on 429 / resource-exhausted, with backoff
 
