@@ -171,6 +171,7 @@ At top-k 3 the answer would never reach the model.
 
 **1.**
 
+I have used AI to help me travers and understand the higher objective. It helped me write the section-based chunker and measure the best distance for all 10 questions in Corb's question. It came back at 0.234 to 0.641 for the on-topic ones and 0.840 to 0.997 for the off-topic ones. It moved the cutoff from the starters, 0.6 to 0.75. It stopped @criteria.md   At this section, because the brief says AI can write criteria, I kept it coded as written.
 **2.**
 
 <!-- ── Stretch features ─────────────────────────────────────────────────────
