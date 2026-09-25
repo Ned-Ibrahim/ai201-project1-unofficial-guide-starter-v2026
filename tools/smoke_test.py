@@ -101,12 +101,22 @@ def main():
 
         results = search("what should I know about this?", corpus=corpus)
         check(f"  retrieves", len(results) > 0, f"top-{len(results)}")
+
+        # Plain semantic search orders by distance. Hybrid search orders by
+        # the fused meaning + keyword rank on purpose, so it is checked for
+        # returning top-k distinct chunks instead.
+        vector = search("what should I know about this?", corpus=corpus, hybrid=False)
         check(
-            f"  results are ordered nearest first",
+            f"  vector results are ordered nearest first",
             all(
-                results[i].distance <= results[i + 1].distance
-                for i in range(len(results) - 1)
+                vector[i].distance <= vector[i + 1].distance
+                for i in range(len(vector) - 1)
             ),
+        )
+        hybrid = search("what should I know about this?", corpus=corpus, hybrid=True)
+        check(
+            f"  hybrid returns top-k distinct chunks",
+            len(hybrid) == len(vector) and len({r.label for r in hybrid}) == len(hybrid),
         )
         check(
             f"  distances are cosine-shaped (0 to 2)",
